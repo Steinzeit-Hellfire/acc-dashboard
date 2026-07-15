@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ACC Dashboard">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACC Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="glass.css">
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<header id="site-header">
+  <div class="hinner">
+    <div class="hbars"><span></span><span></span><span></span></div>
+    <div class="hlogo">ACC <span>Dashboard</span></div>
+    <div class="hright">
+      <div class="hlive"><div class="hdot"></div><span>LIVE</span></div>
+      <div class="srv-dots" id="srv-dots" title="Server-Status">
+        <div class="srv-dot" id="sd0" title="Neuzeit day dry :9600"></div>
+        <div class="srv-dot" id="sd1" title="Neuzeit Day wet :9601"></div>
+        <div class="srv-dot" id="sd2" title="Server 3 :9602"></div>
+      </div>
+      <div class="hsync" id="sync-display" style="font-size:10px;padding:4px 8px">—</div>
+      <button class="hbtn" id="search-btn" onclick="toggleSearch()" title="Suche (/)"><i class="ti ti-search"></i></button>
+      <button class="hbtn" id="filter-btn" onclick="toggleSeasonFilter()" title="Saison-Filter"><i class="ti ti-calendar-event"></i></button>
+      <button class="hbtn" id="compact-btn" onclick="toggleCompact()" title="Kompakt-Modus"><i class="ti ti-layout-compact"></i></button>
+      <button class="hbtn" id="font-btn" onclick="toggleFont()">F1</button>
+      <button class="hbtn" onclick="document.getElementById('settings-modal').style.display='flex'"><i class="ti ti-settings"></i></button>
+      <button class="hbtn" onclick="document.getElementById('shortcut-modal').style.display='flex'"><i class="ti ti-keyboard"></i></button>
+      <button class="hbtn" id="theme-btn" onclick="toggleTheme()">☀</button>
+    </div>
+  </div>
+</header>
+
+<!-- Search Bar -->
+<div class="search-bar" id="search-bar">
+  <i class="ti ti-search" style="font-size:18px;color:var(--tx3)"></i>
+  <input type="text" id="search-input" placeholder="Fahrer oder Strecke suchen…" oninput="doSearch(this.value)" autofocus>
+  <button onclick="toggleSearch()" style="color:var(--tx3);font-size:20px;padding:4px 8px"><i class="ti ti-x"></i></button>
+</div>
+
+<!-- Season Filter Bar -->
+<div class="season-bar" id="season-bar">
+  <label>Von</label>
+  <input type="date" id="from-date" onchange="applySeasonFilter()">
+  <label>Bis</label>
+  <input type="date" id="to-date" onchange="applySeasonFilter()">
+  <span class="season-clear" onclick="clearSeasonFilter()">✕ Zurücksetzen</span>
+  <span style="font-family:var(--mo);font-size:11px;color:var(--tx3)" id="filter-info"></span>
+</div>
+
+<div class="wrap">
+
+  <!-- Main Nav – pill außerhalb des scroll-containers damit overflow nicht clippt -->
+  <div class="nav-wrap" id="nav-wrap">
+    <div id="np-bg"></div>
+    <div class="nav-scroll" id="main-nav">
+      <button class="navbtn active" data-page="strecken" onclick="gotoPage('strecken',this)">Strecken</button>
+      <button class="navbtn" data-page="aktivitaet" onclick="gotoPage('aktivitaet',this)">Aktivität</button>
+      <button class="navbtn" data-page="rekorde" onclick="gotoPage('rekorde',this)">Rekorde & ELO</button>
+      <button class="navbtn" data-page="meisterschaft" onclick="gotoPage('meisterschaft',this)">Meisterschaft</button>
+      <button class="navbtn" data-page="h2h" onclick="gotoPage('h2h',this)">Head-to-Head</button>
+      <button class="navbtn" data-page="meine" onclick="gotoPage('meine',this)">Meine Seite</button>
+      <button class="navbtn" data-page="last" onclick="gotoPage('last',this)">Letzte Session</button>
+      <button class="navbtn" data-page="fahrer" onclick="gotoPage('fahrer',this)">Alle Fahrer</button>
+    <button class="navbtn" data-page="statistik" onclick="gotoPage('statistik',this)">Statistik</button>
+    <button class="navbtn" data-page="teams" onclick="gotoPage('teams',this)">Teams</button>
+    <button class="navbtn" data-page="live" onclick="gotoPage('live',this)">🔴 Live</button>
+    </div>
+  </div>
+
+  <!-- ══ STRECKEN ══ -->
+  <div class="page active" id="page-strecken">
+    <div class="stats-grid">
+      <div class="scard glass"><div class="scard-l">Fahrer</div><div class="scard-v" id="s-drv">—</div><div class="scard-s">Registriert</div></div>
+      <div class="scard glass"><div class="scard-l">Sessions</div><div class="scard-v" id="s-sess">—</div><div class="scard-s">Gesamt</div></div>
+      <div class="scard glass"><div class="scard-l">Strecken</div><div class="scard-v" id="s-trk">—</div><div class="scard-s">Gefahren</div></div>
+      <div class="scard glass"><div class="scard-l">Schnellste Runde</div><div class="scard-v mono" id="s-best">—</div><div class="scard-s" id="s-best-sub">—</div></div>
+    </div>
+    <div class="sh"><span class="section-title" style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Strecken</span></div>
+    <div class="track-tabs" id="track-tabs"><div class="load">Lade…</div></div>
+    <div class="seg-wrap">
+      <div class="seg-ctrl" id="sub-tabs">
+        <div class="seg-pill" id="sp-pill"></div>
+        <button class="segtab active" onclick="gotoPanel('best',this)">Bestzeiten</button>
+        <button class="segtab" onclick="gotoPanel('analyse',this)">Analyse</button>
+        <button class="segtab" onclick="gotoPanel('quali',this)">Qualifying-Grid</button>
+        <button class="segtab" onclick="gotoPanel('sessions',this)">Sessions</button>
+        <button class="segtab" onclick="gotoPanel('strafen',this)">Strafen</button>
+      </div>
+    </div>
+    <div class="panel active" id="panel-best">
+      <div class="car-filter" id="car-filter"></div>
+      <div class="sh">
+        <span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Bestzeiten</span>
+        <span style="font-family:var(--mo);font-size:11px;color:var(--tx3)" id="lb-lbl"></span>
+        <span class="sh-action" id="csv-btn-wrap"></span>
+      </div>
+      <div class="ios-list glass" id="leaderboard"><div class="load">Wähle eine Strecke…</div></div>
+      <div class="sh" style="margin-top:20px"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Sektor-Bestzeiten</span></div>
+      <div class="sec3" id="sector-bests">
+        <div class="seccard"><div class="sec-num">S1</div><div class="sec-drv">—</div><div class="sec-tm">—</div></div>
+        <div class="seccard"><div class="sec-num">S2</div><div class="sec-drv">—</div><div class="sec-tm">—</div></div>
+        <div class="seccard"><div class="sec-num">S3</div><div class="sec-drv">—</div><div class="sec-tm">—</div></div>
+      </div>
+    </div>
+    <div class="panel" id="panel-analyse"><div id="analyse-wrap"><div class="load">Wähle eine Strecke…</div></div></div>
+    <div class="panel" id="panel-quali"><div id="quali-wrap"><div class="load">Wähle eine Strecke…</div></div></div>
+    <div class="panel" id="panel-sessions">
+      <div class="hint-box">ℹ Temperaturen stammen aus der Server-Konfiguration.</div>
+      <div id="sessions-wrap"><div class="load">Wähle eine Strecke…</div></div>
+    </div>
+    <div class="panel" id="panel-strafen"><div id="strafen-wrap"><div class="load">Wähle eine Strecke…</div></div></div>
+  </div>
+
+  <!-- ══ AKTIVITÄT ══ -->
+  <div class="page" id="page-aktivitaet">
+    <div class="sh"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Aktivitäts-Feed</span></div>
+    <div id="activity-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Achievements</span><span style="font-family:var(--mo);font-size:11px;color:var(--tx3);margin-left:8px" id="ach-driver-name"></span></div>
+    <div class="my-pick-group" style="max-width:280px;margin-bottom:16px">
+      <label>Fahrer für Achievements</label>
+      <select id="ach-sel" onchange="loadAchievements()"><option value="">— wählen —</option></select>
+    </div>
+    <div id="achievements-wrap"><div class="load" style="padding:30px">Wähle einen Fahrer</div></div>
+  </div>
+
+  <!-- ══ REKORDE & ELO ══ -->
+  <div class="page" id="page-rekorde">
+    <div class="sh"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Hall of Fame · Streckenrekorde</span></div>
+    <div id="records-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">ELO-Ranking</span></div>
+    <div id="elo-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Wetter-Statistik</span></div>
+    <div id="weather-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Verbesserungs-Übersicht</span></div>
+    <div id="impr-wrap"><div class="load">Lade…</div></div>
+  </div>
+
+  <!-- ══ MEISTERSCHAFT ══ -->
+  <div class="page" id="page-meisterschaft">
+    <div id="champ-wrap"><div class="load">Lade…</div></div>
+  </div>
+
+  <!-- ══ H2H ══ -->
+  <div class="page" id="page-h2h">
+    <div class="ios-card glass" style="margin-bottom:20px">
+      <div class="h2h-picks">
+        <div class="h2h-pick"><label>Fahrer 1</label><select id="h2h-s1" onchange="loadH2H()"><option value="">— wählen —</option></select></div>
+        <div class="h2h-pick"><label>Fahrer 2</label><select id="h2h-s2" onchange="loadH2H()"><option value="">— wählen —</option></select></div>
+      </div>
+    </div>
+    <div id="h2h-wrap"><div class="load" style="padding:60px">Wähle zwei Fahrer</div></div>
+  </div>
+
+  <!-- ══ MEINE SEITE ══ -->
+  <div class="page" id="page-meine">
+    <div class="ios-card glass" style="margin-bottom:20px">
+      <div class="my-pick-row">
+        <div class="my-pick-group"><label>Mein Profil</label><select id="my-sel" onchange="loadMyPage()"><option value="">— wählen —</option></select></div>
+        <div class="my-pick-group"><label>Globales Rundenzeit-Ziel</label><input type="text" id="target-time" placeholder="z.B. 8:15.000" oninput="renderMyPage()"></div>
+        <div class="my-pick-group"><label>Ziel-Strecke</label><select id="target-track"><option value="">Alle Strecken</option></select></div>
+      </div>
+    </div>
+    <div id="my-wrap"><div class="load" style="padding:60px">Wähle dein Profil</div></div>
+  </div>
+
+  <!-- ══ LETZTE SESSION ══ -->
+  <div class="page" id="page-last">
+    <div id="last-wrap"><div class="load">Lade…</div></div>
+    <div id="stint-section" style="display:block;margin-top:28px">
+      <div class="sh"><span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Stint-Analyse</span></div>
+      <!-- Kategorie-Filter -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="chip active" id="stype-all"  onclick="filterStintSessions('',this)">Alle</button>
+        <button class="chip" id="stype-fp"   onclick="filterStintSessions('FP',this)">Training</button>
+        <button class="chip" id="stype-q"    onclick="filterStintSessions('Q',this)">Qualifying</button>
+        <button class="chip" id="stype-r"    onclick="filterStintSessions('R',this)">Rennen</button>
+      </div>
+      <div class="stint-controls">
+        <select class="stint-sel" id="stint-sess" onchange="onStintSessionChange()"><option value="">Session wählen…</option></select>
+        <select class="stint-sel" id="stint-drv" onchange="loadStint()"><option value="">Fahrer wählen…</option></select>
+      </div>
+      <div id="stint-wrap"><div class="load" style="padding:30px">Session und Fahrer wählen</div></div>
+    </div>
+  </div>
+
+  <!-- ══ STATISTIK ══ -->
+  <div class="page" id="page-statistik">
+    <div class="sh"><span class="section-title">Podium-Tracker</span></div>
+    <div id="podium-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span class="section-title">Renndauer-Analyse</span></div>
+    <div id="race-analysis-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span class="section-title">Form-Kurve</span>
+      <div class="my-pick-group" style="max-width:240px;margin-left:12px">
+        <select id="form-sel" onchange="loadForm()"><option value="">Fahrer wählen…</option></select>
+      </div>
+    </div>
+    <div id="form-wrap"><div class="load" style="padding:30px">Fahrer wählen</div></div>
+    <div class="sh" style="margin-top:28px"><span class="section-title">Fahrzeug-Statistik</span>
+      <div class="my-pick-group" style="max-width:220px;margin-left:12px">
+        <select id="carstat-track" onchange="loadCarStats()"><option value="">Strecke wählen…</option></select>
+      </div>
+    </div>
+    <div id="carstat-wrap"><div class="load" style="padding:30px">Strecke wählen</div></div>
+  </div>
+
+  <!-- ══ LIVE-TIMING ══ -->
+  <div class="page" id="page-live">
+    <div class="sh">
+      <span class="section-title">Live-Timing</span>
+      <span id="live-status" style="font-family:var(--mo);font-size:11px;color:var(--tx3)">Verbinde…</span>
+      <span class="sh-action" onclick="window.print()"><i class="ti ti-printer"></i> PDF drucken</span>
+    </div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px" id="live-meta">
+      <div class="scard glass"><div class="scard-l">Strecke</div><div class="scard-v" style="font-size:18px" id="live-track">—</div></div>
+      <div class="scard glass"><div class="scard-l">Session-Typ</div><div class="scard-v" id="live-type">—</div></div>
+      <div class="scard glass"><div class="scard-l">Letztes Update</div><div class="scard-v mono" style="font-size:16px" id="live-updated">—</div></div>
+    </div>
+    <div class="sh"><span class="section-title">Aktuelle Runden</span><span style="font-size:11px;color:var(--tx3);font-family:var(--mo);margin-left:8px">Aktualisiert alle 5s</span></div>
+    <div class="ios-list glass" id="live-laps">
+      <div class="ios-list-head" style="grid-template-columns:1fr 130px 90px 90px 90px 65px">
+        <span>Fahrer</span><span>Fahrzeug</span><span>Runde</span><span>S1</span><span>S2</span><span>S3</span>
+      </div>
+      <div class="load">Verbinde mit Live-Timing…</div>
+    </div>
+  </div>
+
+  <!-- ══ TEAMS ══ -->
+  <div class="page" id="page-teams">
+    <div class="sh"><span class="section-title">Team-Verwaltung</span>
+      <span class="sh-action" onclick="openTeamEditor()">+ Team erstellen</span>
+    </div>
+    <div id="teams-wrap"><div class="load">Lade…</div></div>
+    <div class="sh" style="margin-top:28px"><span class="section-title">Team-Meisterschaft</span></div>
+    <div id="team-standings-wrap"><div class="load">Lade…</div></div>
+    <!-- Team Editor Modal -->
+    <div id="team-editor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+      <div class="glass" style="border-radius:20px;padding:28px;width:92%;max-width:500px">
+        <div style="font-family:var(--f1);font-size:18px;font-weight:700;margin-bottom:20px;color:var(--tx)">Team bearbeiten</div>
+        <input id="team-name" class="stint-sel" placeholder="Team-Name" style="margin-bottom:12px">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="team-color-picks">
+          <div class="chip" style="background:#bf5af2;color:#fff" onclick="pickTeamColor('#bf5af2',this)">Lila</div>
+          <div class="chip" style="background:#0a84ff;color:#fff" onclick="pickTeamColor('#0a84ff',this)">Blau</div>
+          <div class="chip" style="background:#30d158;color:#fff" onclick="pickTeamColor('#30d158',this)">Grün</div>
+          <div class="chip" style="background:#ff453a;color:#fff" onclick="pickTeamColor('#ff453a',this)">Rot</div>
+          <div class="chip" style="background:#ffd60a;color:#000" onclick="pickTeamColor('#ffd60a',this)">Gold</div>
+          <div class="chip" style="background:#ff9f0a;color:#fff" onclick="pickTeamColor('#ff9f0a',this)">Orange</div>
+        </div>
+        <div style="font-family:var(--f1);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Fahrer auswählen</div>
+        <div id="team-member-picks" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px"></div>
+        <div style="display:flex;gap:10px">
+          <button class="csv-btn" onclick="saveTeam()" style="flex:1;justify-content:center">Speichern</button>
+          <button class="csv-btn" onclick="document.getElementById('team-editor').style.display='none'">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ALLE FAHRER ══ -->
+  <div class="page" id="page-fahrer">
+    <div class="sh">
+      <span style="font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)">Alle Fahrer</span>
+      <span style="font-family:var(--mo);font-size:11px;color:var(--tx3)" id="drv-count"></span>
+    </div>
+    <div class="drv-grid" id="drv-grid"><div class="load">Lade…</div></div>
+  </div>
+
+</div>
+
+<footer>
+  <span>ACC Dashboard · Raspberry Pi 5</span>
+  <span id="footer-laps">—</span>
+  <button onclick="doBackup()" style="color:var(--tx3);font-size:12px;padding:4px 10px;border-radius:8px;border:.5px solid var(--sep);background:var(--fill)"><i class="ti ti-database-export"></i> Backup</button>
+</footer>
+
+<!-- Mobile Bottom Nav -->
+<div class="mobile-nav">
+  <div class="mobile-nav-inner">
+    <div class="mnav-btn active" id="mb-strecken" onclick="mobileNav('strecken',this)"><i class="ti ti-flag-3"></i><span>Strecken</span></div>
+    <div class="mnav-btn" id="mb-aktivitaet" onclick="mobileNav('aktivitaet',this)"><i class="ti ti-activity"></i><span>Feed</span></div>
+    <div class="mnav-btn" id="mb-meisterschaft" onclick="mobileNav('meisterschaft',this)"><i class="ti ti-trophy"></i><span>Meisterschaft</span></div>
+    <div class="mnav-btn" id="mb-meine" onclick="mobileNav('meine',this)"><i class="ti ti-user"></i><span>Meine Seite</span></div>
+    <div class="mnav-btn" id="mb-statistik" onclick="mobileNav('statistik',this)"><i class="ti ti-chart-bar"></i><span>Statistik</span></div>
+    <div class="mnav-btn" id="mb-live" onclick="mobileNav('live',this)"><i class="ti ti-live-view"></i><span>Live</span></div>
+    <div class="mnav-btn" id="mb-mehr" onclick="toggleMoreMenu()"><i class="ti ti-grid-dots"></i><span>Mehr</span></div>
+  </div>
+</div>
+
+<!-- Shortcut-Hilfe -->
+<div id="shortcut-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div class="glass" style="border-radius:20px;padding:28px;width:92%;max-width:480px">
+    <div style="font-family:var(--f1);font-size:16px;font-weight:700;margin-bottom:20px;color:var(--tx)">Tastaturkürzel</div>
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr><td style="padding:8px 0;color:var(--tx3);border-bottom:.5px solid var(--sep)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">1–8</kbd></td><td style="color:var(--tx2);border-bottom:.5px solid var(--sep);padding:8px 0">Haupt-Tabs wechseln</td></tr>
+      <tr><td style="padding:8px 0;color:var(--tx3);border-bottom:.5px solid var(--sep)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">/</kbd></td><td style="color:var(--tx2);border-bottom:.5px solid var(--sep);padding:8px 0">Fahrer-Suche öffnen</td></tr>
+      <tr><td style="padding:8px 0;color:var(--tx3);border-bottom:.5px solid var(--sep)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">C</kbd></td><td style="color:var(--tx2);border-bottom:.5px solid var(--sep);padding:8px 0">Kompakt-Modus</td></tr>
+      <tr><td style="padding:8px 0;color:var(--tx3);border-bottom:.5px solid var(--sep)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">T</kbd></td><td style="color:var(--tx2);border-bottom:.5px solid var(--sep);padding:8px 0">Dark/Light Mode</td></tr>
+      <tr><td style="padding:8px 0;color:var(--tx3);border-bottom:.5px solid var(--sep)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">?</kbd></td><td style="color:var(--tx2);border-bottom:.5px solid var(--sep);padding:8px 0">Shortcut-Hilfe</td></tr>
+      <tr><td style="padding:8px 0;color:var(--tx3)"><kbd style="background:var(--fill2);border:.5px solid var(--sep2);border-radius:4px;padding:2px 8px;font-family:var(--mo)">Esc</kbd></td><td style="color:var(--tx2);padding:8px 0">Schließen</td></tr>
+    </table>
+    <button onclick="document.getElementById('shortcut-modal').style.display='none'" style="margin-top:20px;width:100%;padding:10px;border-radius:12px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx2);font-size:14px">Schließen</button>
+  </div>
+</div>
+
+<!-- Einstellungen -->
+<div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div class="glass" style="border-radius:20px;padding:28px;width:92%;max-width:480px">
+    <div style="font-family:var(--f1);font-size:16px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Einstellungen</div>
+    <div class="sh" style="margin-bottom:8px"><span class="section-title">Sync-Intervall</span></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <input type="range" id="sync-slider" min="1" max="30" value="5" style="flex:1" oninput="document.getElementById('sync-val').textContent=this.value">
+      <span id="sync-val" style="font-family:var(--mo);font-size:15px;color:var(--pu);min-width:30px">5</span>
+      <span style="color:var(--tx3);font-size:13px">min</span>
+      <button class="csv-btn" onclick="saveSyncInterval()">Speichern</button>
+    </div>
+    <div class="sh" style="margin-bottom:8px"><span class="section-title">Admin-Passwort</span></div>
+    <div style="display:flex;gap:10px;margin-bottom:20px">
+      <input type="password" id="admin-pw" placeholder="Neues Passwort (leer = kein Schutz)" class="stint-sel" style="flex:1">
+      <button class="csv-btn" onclick="savePassword()">Speichern</button>
+    </div>
+    <div class="sh" style="margin-bottom:8px"><span class="section-title">ACC Server verwalten</span>
+      <span class="sh-action" onclick="openAddServerModal()">+ Server hinzufügen</span>
+    </div>
+    <div id="server-manage-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+    <button onclick="document.getElementById('settings-modal').style.display='none'" style="width:100%;padding:10px;border-radius:12px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx2);font-size:14px">Schließen</button>
+  </div>
+</div>
+
+<!-- Server hinzufügen Modal -->
+<div id="add-server-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:210;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div class="glass" style="border-radius:20px;padding:24px;width:92%;max-width:400px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--tx)">Server hinzufügen</div>
+    <input type="hidden" id="edit-server-id">
+    <div style="display:grid;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px">Name</div>
+        <input id="srv-name" class="stint-sel" placeholder="z.B. Neuzeit Night Dry" style="width:100%">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 100px;gap:8px">
+        <div>
+          <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px">IP-Adresse</div>
+          <input id="srv-ip" class="stint-sel" value="152.53.47.94">
+        </div>
+        <div>
+          <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px">Port</div>
+          <input id="srv-port" class="stint-sel" type="number" value="9600">
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px">Passwort</div>
+        <input id="srv-pw" class="stint-sel" value="123R321" style="width:100%">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="saveServerEntry()" style="flex:1;padding:10px;border-radius:12px;background:rgba(191,90,242,.2);border:.5px solid rgba(191,90,242,.4);color:#bf5af2;font-size:14px;font-weight:700;cursor:pointer">Speichern</button>
+      <button onclick="document.getElementById('add-server-modal').style.display='none'" style="padding:10px 16px;border-radius:12px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx3);font-size:14px;cursor:pointer">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-ov" id="modal">
+  <div class="modal-box glass">
+    <button class="modal-x" onclick="closeModal()">✕</button>
+    <div class="modal-name" id="m-name">—</div>
+    <div class="modal-sub" id="m-steam">—</div>
+    <table class="ios-table" id="m-table">
+      <thead><tr><th>Strecke</th><th>Auto</th><th>Bestzeit</th><th>Rdn</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+let _pwaPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();_pwaPrompt=e;
+  document.getElementById('pwa-btn').style.display='inline-flex';
+});
+function installPWA(){if(_pwaPrompt){_pwaPrompt.prompt();_pwaPrompt.userChoice.then(()=>{_pwaPrompt=null;document.getElementById('pwa-btn').style.display='none';});}}
+</script>
+
+<!-- ══ Server-Statusleiste (fixed bottom) ══ -->
+<div id="server-bar">
+  <div class="sb-section">
+    <span class="sb-dot" id="sb-dot"></span>
+    <span id="sb-servername">ACC Server</span>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-section">
+    <i class="ti ti-users" aria-hidden="true"></i>
+    <span id="sb-players">—</span>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-section">
+    <i class="ti ti-flag-3" aria-hidden="true"></i>
+    <span id="sb-track">—</span>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-section">
+    <i class="ti ti-clock" aria-hidden="true"></i>
+    <span id="sb-session-type">—</span>
+  </div>
+  <div class="sb-spacer"></div>
+  <div class="sb-section" id="sb-sync-wrap" style="cursor:pointer" onclick="manualSync()">
+    <i class="ti ti-refresh" id="sb-sync-icon" aria-hidden="true"></i>
+    <span id="sb-sync-text">Sync</span>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-section" id="sb-acc-btn" style="cursor:pointer" onclick="openAccConnect()" title="Direkt zum Server verbinden">
+    <i class="ti ti-plug" style="font-size:13px;opacity:.7"></i>
+    <span>Beitreten</span>
+  </div>
+</div>
+
+<!-- ACC Connector Modal (acc-connect:// Protokoll) -->
+<div id="acc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div class="glass" style="border-radius:20px;padding:28px;width:92%;max-width:440px">
+    <div style="font-size:18px;font-weight:800;margin-bottom:4px;color:var(--tx)">🎮 Server beitreten</div>
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:20px">
+      Öffnet ACC Connector und verbindet direkt mit dem Server.<br>
+      <a href="https://github.com/lonemeow/acc-connector/releases" target="_blank" style="color:var(--pu)">ACC Connector installieren ↗</a>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px" id="acc-server-list">
+      <!-- Wird dynamisch befüllt -->
+    </div>
+    <div style="margin-top:16px;padding:12px;background:rgba(255,255,255,.05);border-radius:12px;font-size:11px;color:var(--tx3)">
+      💡 ACC Connector muss auf deinem PC installiert sein. Beim Klick auf "Beitreten" öffnet sich ACC Connector automatisch.
+    </div>
+    <button onclick="document.getElementById('acc-modal').style.display='none'" 
+      style="margin-top:14px;width:100%;padding:10px;border-radius:12px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx3);font-size:14px;cursor:pointer">Schließen</button>
+  </div>
+</div>
+</body>
+</html>

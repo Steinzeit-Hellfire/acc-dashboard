@@ -1,0 +1,14 @@
+[Unit]
+Description=ACC Dashboard API
+After=network.target
+
+[Service]
+Type=simple
+User=detrees95
+WorkingDirectory=/home/detrees95/acc-dashboard
+ExecStart=/home/detrees95/acc-dashboard/venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+{
+  "name": "ACC Dashboard",
+  "short_name": "ACC",
+  "description": "Assetto Corsa Competizione Rennzeiten Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": []
+}
