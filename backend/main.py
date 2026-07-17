@@ -1414,10 +1414,13 @@ async def live_timing():
         while True:
             try:
                 conn = get_db()
-                # Neueste Session
-                last = conn.execute(
-                    "SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 1"
-                ).fetchone()
+                # Neueste ECHTE Session (keine manuellen Einträge, max. 20 Min. alt)
+                last = conn.execute("""
+                    SELECT * FROM sessions
+                    WHERE id NOT LIKE 'manual_%'
+                      AND timestamp >= datetime('now', '-20 minutes')
+                    ORDER BY timestamp DESC LIMIT 1
+                """).fetchone()
                 if last:
                     sid = last["id"]
                     rows = conn.execute("""
@@ -1438,6 +1441,8 @@ async def live_timing():
                             "ts": datetime.now().isoformat()
                         })
                         yield f"data: {payload}\n\n"
+                else:
+                    yield f"data: {json.dumps({'session': None, 'laps': [], 'ts': datetime.now().isoformat()})}\n\n"
                 conn.close()
             except Exception as e:
                 yield f"data: {{\"error\":\"{str(e)}\"}}\n\n"
@@ -1451,17 +1456,21 @@ async def live_timing():
 
 @app.get("/api/live-poll")
 def live_poll():
-    """Schneller Live-Polling Endpoint – liefert aktuelle Session + alle Runden."""
+    """Schneller Live-Polling Endpoint – liefert aktuelle Session + alle Runden.
+    Zeigt NUR echte, frische Sessions (keine manuellen Einträge, max. 20 Min alt)."""
     conn = get_db()
-    
-    # Neueste Session
-    last = conn.execute(
-        "SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 1"
-    ).fetchone()
-    
+
+    # Neueste ECHTE, FRISCHE Session
+    last = conn.execute("""
+        SELECT * FROM sessions
+        WHERE id NOT LIKE 'manual_%'
+          AND timestamp >= datetime('now', '-20 minutes')
+        ORDER BY timestamp DESC LIMIT 1
+    """).fetchone()
+
     if not last:
         conn.close()
-        return {"session": None, "drivers": [], "laps": []}
+        return {"session": None, "drivers": [], "laps": [], "total_laps": 0}
     
     sid = last["id"]
     
@@ -2100,3 +2109,137 @@ def delete_manual_lap(lap_id: int):
 def get_car_list():
     """Gibt die Auto-Liste zurück (für Dropdown im Formular)."""
     return [{"model": k, "name": v} for k, v in sorted(CAR.items())]
+
+# ═══════════════════════════════════════════════════════
+# Status- & Störungsmeldungen
+# ═══════════════════════════════════════════════════════
+
+def init_status_table():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS status_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT DEFAULT 'info',
+            title TEXT NOT NULL,
+            message TEXT DEFAULT '',
+            source TEXT DEFAULT 'manual',
+            active INTEGER DEFAULT 1,
+            created_at TEXT,
+            resolved_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_status_table()
+
+@app.get("/api/status-messages")
+def get_status_messages(all: bool = False):
+    """Gibt Status-/Störungsmeldungen zurück. Standard: nur aktive."""
+    conn = get_db()
+    if all:
+        rows = conn.execute(
+            "SELECT * FROM status_messages ORDER BY created_at DESC LIMIT 50"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM status_messages WHERE active=1 ORDER BY created_at DESC"
+        ).fetchall()
+    conn.close()
+    return [{**dict(r), "created_str": berlin(r["created_at"]) if r["created_at"] else ""} for r in rows]
+
+@app.post("/api/status-messages")
+def add_status_message(body: dict):
+    """Neue Meldung anlegen (manuell, z.B. geplante Wartung)."""
+    mtype   = body.get("type", "info")       # info | warning | critical
+    title   = (body.get("title") or "").strip()
+    message = (body.get("message") or "").strip()
+    source  = body.get("source", "manual")
+
+    if not title:
+        return {"ok": False, "error": "Titel fehlt"}
+    if mtype not in ("info", "warning", "critical"):
+        mtype = "info"
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO status_messages (type,title,message,source,active,created_at)
+        VALUES (?,?,?,?,1,?)
+    """, (mtype, title, message, source, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+@app.put("/api/status-messages/{msg_id}/resolve")
+def resolve_status_message(msg_id: int):
+    """Meldung als erledigt markieren (verschwindet aus dem Banner)."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE status_messages SET active=0, resolved_at=? WHERE id=?",
+        (datetime.now().isoformat(), msg_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+@app.delete("/api/status-messages/{msg_id}")
+def delete_status_message(msg_id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM status_messages WHERE id=?", (msg_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ── Automatische Server-Überwachung ──
+# Erkennt selbstständig wenn ein Server offline geht / wieder online kommt
+# und legt dafür automatisch eine Status-Meldung an.
+
+_server_state = {}  # { server_name: "online" | "offline" }
+
+def monitor_servers_loop():
+    import time as _time
+    while True:
+        try:
+            servers = get_acc_servers()
+            conn = get_db()
+            for s in servers:
+                name = s["name"]
+                now_online = s.get("online", False)
+                prev = _server_state.get(name)
+
+                if prev is not None and prev != now_online:
+                    # Zustand hat sich geändert -> Meldung erzeugen
+                    if now_online:
+                        conn.execute("""
+                            INSERT INTO status_messages (type,title,message,source,active,created_at)
+                            VALUES ('info',?,?,'auto',1,?)
+                        """, (
+                            f"✅ {name} ist wieder online",
+                            f"Der Server {name} ({s['ip']}:{s['port']}) ist wieder erreichbar.",
+                            datetime.now().isoformat()
+                        ))
+                        # Zugehörige alte "offline"-Meldung für diesen Server auto-auflösen
+                        conn.execute("""
+                            UPDATE status_messages SET active=0, resolved_at=?
+                            WHERE source='auto' AND active=1 AND title LIKE ?
+                        """, (datetime.now().isoformat(), f"%{name} ist offline%"))
+                    else:
+                        conn.execute("""
+                            INSERT INTO status_messages (type,title,message,source,active,created_at)
+                            VALUES ('warning',?,?,'auto',1,?)
+                        """, (
+                            f"⚠️ {name} ist offline",
+                            f"Der Server {name} ({s['ip']}:{s['port']}) ist gerade nicht erreichbar. "
+                            f"Das kann an einem Neustart, Wartung oder einer Störung liegen.",
+                            datetime.now().isoformat()
+                        ))
+                    conn.commit()
+
+                _server_state[name] = now_online
+            conn.close()
+        except Exception:
+            pass  # Überwachung darf nie den Server abschießen
+        _time.sleep(60)  # jede Minute prüfen
+
+threading.Thread(target=monitor_servers_loop, daemon=True).start()

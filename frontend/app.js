@@ -1891,3 +1891,132 @@ document.addEventListener('click', e => {
     setTimeout(loadServerManageList, 100);
   }
 });
+
+/* ── Status- & Störungsmeldungen ── */
+
+const STATUS_STYLES = {
+  info:     { bg: 'rgba(10,132,255,.12)',  border: 'rgba(10,132,255,.35)',  color: '#0a84ff', icon: 'ℹ️' },
+  warning:  { bg: 'rgba(255,159,10,.12)',  border: 'rgba(255,159,10,.35)',  color: '#ff9f0a', icon: '⚠️' },
+  critical: { bg: 'rgba(255,69,58,.12)',   border: 'rgba(255,69,58,.35)',   color: '#ff453a', icon: '🚨' },
+};
+
+async function loadStatusBanner() {
+  const wrap = document.getElementById('status-banner-wrap');
+  if (!wrap) return;
+  try {
+    const msgs = await apiGet('/status-messages');
+    if (!msgs.length) { wrap.innerHTML = ''; return; }
+
+    // Nur ungelesene/nicht-dismissed anzeigen (im Browser gemerkt)
+    const dismissed = JSON.parse(localStorage.getItem('dismissedStatusMsgs') || '[]');
+    const visible = msgs.filter(m => !dismissed.includes(m.id));
+    if (!visible.length) { wrap.innerHTML = ''; return; }
+
+    wrap.innerHTML = visible.map(m => {
+      const st = STATUS_STYLES[m.type] || STATUS_STYLES.info;
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;
+                  background:${st.bg};border-bottom:1px solid ${st.border};position:relative">
+        <div style="font-size:16px;flex-shrink:0">${st.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:${st.color}">${esc(m.title)}</div>
+          ${m.message ? `<div style="font-size:12px;color:var(--tx2);margin-top:2px">${esc(m.message)}</div>` : ''}
+          <div style="font-size:10px;color:var(--tx3);margin-top:3px">${esc(m.created_str || '')}</div>
+        </div>
+        <button onclick="dismissStatusMsg(${m.id})"
+          style="background:none;border:none;color:var(--tx3);font-size:16px;cursor:pointer;line-height:1;padding:2px 6px;flex-shrink:0">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) { wrap.innerHTML = ''; }
+}
+
+function dismissStatusMsg(id) {
+  const dismissed = JSON.parse(localStorage.getItem('dismissedStatusMsgs') || '[]');
+  if (!dismissed.includes(id)) dismissed.push(id);
+  localStorage.setItem('dismissedStatusMsgs', JSON.stringify(dismissed));
+  loadStatusBanner();
+}
+
+async function loadStatusManageList() {
+  const el = document.getElementById('status-manage-list');
+  if (!el) return;
+  try {
+    const msgs = await apiGet('/status-messages?all=true');
+    if (!msgs.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--tx3);padding:8px">Keine Meldungen vorhanden.</div>';
+      return;
+    }
+    el.innerHTML = msgs.map(m => {
+      const st = STATUS_STYLES[m.type] || STATUS_STYLES.info;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;
+                  background:rgba(255,255,255,.06);border:.5px solid ${m.active ? st.border : 'rgba(255,255,255,.10)'};
+                  opacity:${m.active ? '1' : '.5'}">
+        <div style="font-size:14px">${st.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--tx)">${esc(m.title)}</div>
+          <div style="font-size:10px;color:var(--tx3)">${m.active ? 'Aktiv' : 'Erledigt'} · ${esc(m.created_str||'')} · ${m.source==='auto'?'automatisch':'manuell'}</div>
+        </div>
+        ${m.active ? `<button onclick="resolveStatusMsg(${m.id})"
+          style="padding:4px 10px;border-radius:8px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx2);font-size:11px;cursor:pointer">Erledigt</button>` : ''}
+        <button onclick="deleteStatusMsg(${m.id})"
+          style="padding:4px 10px;border-radius:8px;background:rgba(255,69,58,.1);border:.5px solid rgba(255,69,58,.3);color:#ff453a;font-size:11px;cursor:pointer">🗑️</button>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function openAddStatusModal() {
+  document.getElementById('status-type').value = 'info';
+  document.getElementById('status-title').value = '';
+  document.getElementById('status-message').value = '';
+  document.getElementById('add-status-modal').style.display = 'flex';
+}
+
+async function saveStatusEntry() {
+  const type    = document.getElementById('status-type').value;
+  const title   = document.getElementById('status-title').value.trim();
+  const message = document.getElementById('status-message').value.trim();
+
+  if (!title) { toast('Bitte einen Titel eingeben', 'var(--red)'); return; }
+
+  try {
+    await fetch(API + '/status-messages', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type, title, message, source: 'manual' })
+    });
+    document.getElementById('add-status-modal').style.display = 'none';
+    toast('✅ Meldung veröffentlicht', 'var(--te)');
+    loadStatusManageList();
+    loadStatusBanner();
+  } catch(e) { toast('Fehler: ' + e.message, 'var(--red)'); }
+}
+
+async function resolveStatusMsg(id) {
+  try {
+    await fetch(API + '/status-messages/' + id + '/resolve', { method: 'PUT' });
+    toast('Als erledigt markiert', 'var(--te)');
+    loadStatusManageList();
+    loadStatusBanner();
+  } catch(e) {}
+}
+
+async function deleteStatusMsg(id) {
+  if (!confirm('Meldung wirklich löschen?')) return;
+  try {
+    await fetch(API + '/status-messages/' + id, { method: 'DELETE' });
+    toast('Gelöscht', 'var(--te)');
+    loadStatusManageList();
+    loadStatusBanner();
+  } catch(e) {}
+}
+
+// Banner beim Laden der Seite + alle 60s aktualisieren
+loadStatusBanner();
+setInterval(loadStatusBanner, 60000);
+
+// Beim Öffnen der Einstellungen auch Status-Liste laden
+document.addEventListener('click', e => {
+  if (e.target.closest('[onclick*="settings-modal"]')) {
+    setTimeout(loadStatusManageList, 100);
+  }
+});
