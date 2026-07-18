@@ -1742,9 +1742,18 @@ async function manualSync() {
   await updateServerBar();
 }
 
-// Sofort beim Laden + alle 15 Sekunden
-updateServerBar();
-setInterval(updateServerBar, 15000);
+// Sofort wenn DOM bereit ist (nicht vorher - sonst werden die Elemente
+// noch nicht gefunden und die Leiste bleibt bei den Platzhaltern hängen,
+// bis man manuell auf Sync klickt) + danach alle 10 Sekunden.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    updateServerBar();
+    setInterval(updateServerBar, 10000);
+  });
+} else {
+  updateServerBar();
+  setInterval(updateServerBar, 10000);
+}
 
 /* ═══════════════════════════════════════════════════════
    ACC Connector – acc-connect:// Protokoll
