@@ -1091,7 +1091,7 @@ def set_password(body: dict):
 
 @app.get("/api/config/sync-interval")
 def get_sync_interval():
-    return {"minutes": int(cfg_get("sync_interval", 5))}
+    return {"minutes": int(cfg_get("sync_interval", 2))}
 
 @app.post("/api/config/sync-interval")
 def set_sync_interval(body: dict):
@@ -1374,10 +1374,10 @@ threading.Thread(target=auto_backup_loop, daemon=True).start()
 def auto_sync_loop():
     """Führt acc-sync.sh automatisch aus – kein Crontab nötig."""
     import subprocess, time
-    SYNC_SCRIPT = "/home/detrees95/acc-dashboard/acc-sync.sh"
+    SYNC_SCRIPT = "/home/detrees95/acc-dashboard/scripts/acc-sync.sh"
     while True:
         try:
-            interval_min = int(cfg_get("sync_interval", 5))
+            interval_min = int(cfg_get("sync_interval", 2))
         except:
             interval_min = 5
         time.sleep(interval_min * 60)
