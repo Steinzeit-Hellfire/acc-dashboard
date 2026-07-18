@@ -718,7 +718,14 @@ def get_sync_time():
     return {"sync_time":ts,"sync_time_str":dt.strftime("%d.%m.%Y %H:%M")}
 
 @app.post("/api/reload")
-def reload(): ingest_all(); return {"status":"ok"}
+def reload():
+    ingest_all()
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO config VALUES (?,?)",
+                 ("last_sync_time", datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 @app.get("/health")
 def health(): return {"status":"ok"}
@@ -2166,6 +2173,32 @@ def add_status_message(body: dict):
         INSERT INTO status_messages (type,title,message,source,active,created_at)
         VALUES (?,?,?,?,1,?)
     """, (mtype, title, message, source, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+@app.put("/api/status-messages/{msg_id}")
+def edit_status_message(msg_id: int, body: dict):
+    """Bearbeitet eine bestehende Meldung (Titel, Text, Typ)."""
+    mtype   = body.get("type", "info")
+    title   = (body.get("title") or "").strip()
+    message = (body.get("message") or "").strip()
+
+    if not title:
+        return {"ok": False, "error": "Titel fehlt"}
+    if mtype not in ("info", "warning", "critical"):
+        mtype = "info"
+
+    conn = get_db()
+    row = conn.execute("SELECT id FROM status_messages WHERE id=?", (msg_id,)).fetchone()
+    if not row:
+        conn.close()
+        return {"ok": False, "error": "Meldung nicht gefunden"}
+
+    conn.execute(
+        "UPDATE status_messages SET type=?, title=?, message=? WHERE id=?",
+        (mtype, title, message, msg_id)
+    )
     conn.commit()
     conn.close()
     return {"ok": True}

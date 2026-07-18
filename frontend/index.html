@@ -363,7 +363,8 @@
 <!-- Status-Meldung erstellen Modal -->
 <div id="add-status-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:220;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
   <div class="glass" style="border-radius:20px;padding:24px;width:92%;max-width:400px">
-    <div style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--tx)">Meldung erstellen</div>
+    <div id="status-modal-title" style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--tx)">Meldung erstellen</div>
+    <input type="hidden" id="edit-status-id">
     <div style="display:grid;gap:10px;margin-bottom:16px">
       <div>
         <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px">Typ</div>
@@ -383,7 +384,7 @@
       </div>
     </div>
     <div style="display:flex;gap:8px">
-      <button onclick="saveStatusEntry()" style="flex:1;padding:10px;border-radius:12px;background:rgba(191,90,242,.2);border:.5px solid rgba(191,90,242,.4);color:#bf5af2;font-size:14px;font-weight:700;cursor:pointer">Veröffentlichen</button>
+      <button id="status-save-btn" onclick="saveStatusEntry()" style="flex:1;padding:10px;border-radius:12px;background:rgba(191,90,242,.2);border:.5px solid rgba(191,90,242,.4);color:#bf5af2;font-size:14px;font-weight:700;cursor:pointer">Veröffentlichen</button>
       <button onclick="document.getElementById('add-status-modal').style.display='none'" style="padding:10px 16px;border-radius:12px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx3);font-size:14px;cursor:pointer">Abbrechen</button>
     </div>
   </div>

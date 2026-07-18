@@ -1957,6 +1957,8 @@ async function loadStatusManageList() {
         </div>
         ${m.active ? `<button onclick="resolveStatusMsg(${m.id})"
           style="padding:4px 10px;border-radius:8px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx2);font-size:11px;cursor:pointer">Erledigt</button>` : ''}
+        <button onclick='openEditStatusModal(${JSON.stringify({id:m.id,type:m.type,title:m.title,message:m.message}).replace(/'/g,"&#39;")})'
+          style="padding:4px 10px;border-radius:8px;background:var(--fill);border:.5px solid var(--sep);color:var(--tx2);font-size:11px;cursor:pointer">✏️</button>
         <button onclick="deleteStatusMsg(${m.id})"
           style="padding:4px 10px;border-radius:8px;background:rgba(255,69,58,.1);border:.5px solid rgba(255,69,58,.3);color:#ff453a;font-size:11px;cursor:pointer">🗑️</button>
       </div>`;
@@ -1965,13 +1967,27 @@ async function loadStatusManageList() {
 }
 
 function openAddStatusModal() {
+  document.getElementById('edit-status-id').value = '';
   document.getElementById('status-type').value = 'info';
   document.getElementById('status-title').value = '';
   document.getElementById('status-message').value = '';
+  document.getElementById('status-modal-title').textContent = 'Meldung erstellen';
+  document.getElementById('status-save-btn').textContent = 'Veröffentlichen';
+  document.getElementById('add-status-modal').style.display = 'flex';
+}
+
+function openEditStatusModal(m) {
+  document.getElementById('edit-status-id').value = m.id;
+  document.getElementById('status-type').value = m.type;
+  document.getElementById('status-title').value = m.title;
+  document.getElementById('status-message').value = m.message || '';
+  document.getElementById('status-modal-title').textContent = 'Meldung bearbeiten';
+  document.getElementById('status-save-btn').textContent = 'Speichern';
   document.getElementById('add-status-modal').style.display = 'flex';
 }
 
 async function saveStatusEntry() {
+  const editId  = document.getElementById('edit-status-id').value;
   const type    = document.getElementById('status-type').value;
   const title   = document.getElementById('status-title').value.trim();
   const message = document.getElementById('status-message').value.trim();
@@ -1979,13 +1995,22 @@ async function saveStatusEntry() {
   if (!title) { toast('Bitte einen Titel eingeben', 'var(--red)'); return; }
 
   try {
-    await fetch(API + '/status-messages', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ type, title, message, source: 'manual' })
-    });
+    if (editId) {
+      await fetch(API + '/status-messages/' + editId, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type, title, message })
+      });
+      toast('✅ Meldung aktualisiert', 'var(--te)');
+    } else {
+      await fetch(API + '/status-messages', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type, title, message, source: 'manual' })
+      });
+      toast('✅ Meldung veröffentlicht', 'var(--te)');
+    }
     document.getElementById('add-status-modal').style.display = 'none';
-    toast('✅ Meldung veröffentlicht', 'var(--te)');
     loadStatusManageList();
     loadStatusBanner();
   } catch(e) { toast('Fehler: ' + e.message, 'var(--red)'); }
