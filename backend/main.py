@@ -923,31 +923,17 @@ def get_stint(session_id: str, steam_id: str):
 @app.get("/api/server-status")
 def get_server_status():
     """
-    Server-Status: kombiniert TCP-Check + Sync-Zeit.
-    Grün = Server erreichbar (TCP ODER letzter Sync < 10min).
+    Server-Status: NUR echter TCP-Check gegen die aktuelle (dynamische) Serverliste.
+    Kein Rückfall auf 'letzter Sync war kürzlich' mehr – das sagte nichts über den
+    tatsächlichen Server-Zustand aus, da der Sync-Loop unabhängig vom Server läuft.
     """
-    import socket
-    SERVER_IP = "152.53.47.94"
-    PORTS = {"Neuzeit Day Dry": 9600, "Neuzeit Day Wet": 9601, "Server 3": 9602}
+    servers = get_acc_servers()  # nutzt die echte, dynamische Liste (inkl. Night-Server etc.)
 
-    # TCP-Check (klappt wenn Windows-Firewall TCP erlaubt)
-    results = {}
-    any_tcp = False
-    for name, port in PORTS.items():
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(2)
-            r = s.connect_ex((SERVER_IP, port))
-            s.close()
-            online = (r == 0)
-        except:
-            online = False
-        results[name] = {"online": online, "port": port}
-        if online: any_tcp = True
+    results = {s["name"]: {"online": s["online"], "port": s["port"]} for s in servers}
+    any_tcp = any(s["online"] for s in servers)
 
-    # Sync-Zeit prüfen: wenn letzter Sync < 15min → Server war erreichbar
+    # Letzter Sync – nur zur Anzeige, NICHT für den Online-Status
     last_sync_str = None
-    sync_recent = False
     try:
         conn = get_db()
         row = conn.execute(
@@ -956,35 +942,37 @@ def get_server_status():
         conn.close()
         if row:
             last_sync_str = row["value"]
-            from datetime import datetime as dt2
-            last_sync_dt = dt2.fromisoformat(last_sync_str)
-            diff_min = (dt2.now() - last_sync_dt).total_seconds() / 60
-            sync_recent = diff_min < 15
     except: pass
 
-    # Spieler aus neuester Session (alle, nicht nur gültige Runden)
+    # Spieler NUR aus einer echten, frischen Session (keine manuellen Einträge,
+    # max. 20 Min alt) - sonst bleibt hier für immer "1 Fahrer" stehen.
     player_count = 0
     try:
         conn = get_db()
         row = conn.execute("""
             SELECT COUNT(DISTINCT steam_id) as c FROM laps
             WHERE session_id = (
-                SELECT id FROM sessions ORDER BY timestamp DESC LIMIT 1
+                SELECT id FROM sessions
+                WHERE id NOT LIKE 'manual_%'
+                  AND timestamp >= datetime('now', '-20 minutes')
+                ORDER BY timestamp DESC LIMIT 1
             )
         """).fetchone()
         conn.close()
-        if row: player_count = row["c"]
+        if row: player_count = row["c"] or 0
     except: pass
 
-    # Online = TCP klappt ODER letzter Sync war kürzlich
-    any_online = any_tcp or sync_recent
+    # Online = ausschließlich echter TCP-Check. Kein Server erreichbar → offline, Punkt.
+    any_online = any_tcp
+    if not any_online:
+        player_count = 0  # niemand kann fahren wenn kein Server läuft
 
     return {
         "servers": results,
-        "ip": SERVER_IP,
+        "ip": servers[0]["ip"] if servers else "",
         "any_online": any_online,
         "any_tcp": any_tcp,
-        "sync_recent": sync_recent,
+        "sync_recent": False,  # nicht mehr für Online-Logik genutzt, nur Info
         "last_sync": last_sync_str,
         "player_count": player_count
     }
